@@ -1,0 +1,55 @@
+name: Stage2 BlueGreen Check
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      docker:
+        image: docker:24.0.5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy example env
+        run: cp .env.example .env
+
+      - name: Ensure env has images (fail if not)
+        run: |
+          if ! grep -q '^BLUE_IMAGE=' .env; then echo "Set BLUE_IMAGE in .env"; exit 1; fi
+          if ! grep -q '^GREEN_IMAGE=' .env; then echo "Set GREEN_IMAGE in .env"; exit 1; fi
+
+      - name: Start compose
+        run: docker compose up -d
+
+      - name: Wait for apps
+        run: |
+          for i in $(seq 1 20); do
+            curl -sSf http://localhost:8081/healthz && break || sleep 1
+          done
+
+      - name: Baseline check
+        run: |
+          echo "Baseline check"
+          curl -i http://localhost:8080/version | head -n 10
+
+      - name: Trigger chaos on blue and verify switch to green
+        run: |
+          curl -s -X POST "http://localhost:8081/chaos/start?mode=error"
+          sleep 0.5
+          ok=0; total=0
+          end=$((SECONDS+10))
+          while [ $SECONDS -lt $end ]; do
+            total=$((total+1))
+            out=$(curl -s -D - http://localhost:8080/version | sed -n '1,12p')
+            echo "$out"
+            echo "$out" | grep -q "X-App-Pool: green" && ok=$((ok+1))
+            sleep 0.25
+          done
+          echo "green responses: $ok / $total"
+          if [ $ok -lt $((total*95/100)) ]; then
+            echo "Fail: less than 95% responses from green"; exit 1
+          fi

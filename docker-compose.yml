@@ -1,0 +1,50 @@
+version: "3.8"
+services:
+  nginx:
+    image: nginx:stable
+    container_name: nginx_bluegreen
+    ports:
+      - "${PORT:-8080}:80"
+    environment:
+      - ACTIVE_POOL=${ACTIVE_POOL}
+      - BLUE_UPSTREAM_HOST=app_blue
+      - GREEN_UPSTREAM_HOST=app_green
+    volumes:
+      - ./nginx/nginx.tmpl:/etc/nginx/nginx.tmpl:ro
+      - ./nginx/start.sh:/start.sh:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - app_blue
+      - app_green
+    entrypoint: ["/bin/sh", "/start.sh"]
+    restart: unless-stopped
+
+  app_blue:
+    image: ${BLUE_IMAGE}
+    container_name: app_blue
+    environment:
+      - APP_POOL=blue
+      - RELEASE_ID=${RELEASE_ID_BLUE}
+      - PORT=3000
+    ports:
+      - "${BLUE_PORT:-8081}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+
+  app_green:
+    image: ${GREEN_IMAGE}
+    container_name: app_green
+    environment:
+      - APP_POOL=green
+      - RELEASE_ID=${RELEASE_ID_GREEN}
+      - PORT=3000
+    ports:
+      - "${GREEN_PORT:-8082}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
