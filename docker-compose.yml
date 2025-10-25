@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   app_blue:
-    image: ${BLUE_IMAGE}
+    image: "${GREEN_IMAGE:-yimikaade/wonderful:devops-stage-two}"
     container_name: app_blue
     environment:
       - APP_POOL=blue
@@ -35,7 +35,7 @@ services:
       retries: 3
 
   app_green:
-    image: ${GREEN_IMAGE}
+    image: "${GREEN_IMAGE:-yimikaade/wonderful:devops-stage-two}"
     container_name: app_green
     environment:
       - APP_POOL=green
